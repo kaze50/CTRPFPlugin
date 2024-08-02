@@ -1,2 +1,5 @@
 /Build
+
 *.3gx
+*.elf
+*.log
