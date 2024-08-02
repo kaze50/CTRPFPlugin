@@ -1,0 +1,36 @@
+{
+    "env": {
+        "devkitpro": "/opt/devkitpro",
+        "devkitarm": "${devkitpro}/devkitARM",
+        "ctrulib": "${devkitpro}/libctru",
+        "ctrpflib": "${devkitpro}/libctrpf"
+    },
+    "configurations": [
+        {
+            "name": "TestPlugin - Unix",
+            "includePath": [
+                "${workspaceFolder}/Includes/**",
+                "${ctrpflib}/include/**",
+                "${ctrulib}/include/**"
+            ],
+            "defines": [
+                "ARM11",
+                "_3DS"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/Includes/**",
+                    "${ctrpflib}/include/**",
+                    "${ctrulib}/include/**"
+                ],
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": ""
+            },
+            "cStandard": "c17",
+            "cppStandard": "c++20",
+            "compilerPath": "${devkitarm}/bin/arm-none-eabi-g++",
+            "intelliSenseMode": "gcc-arm"
+        }
+    ],
+    "version": 4
+}
