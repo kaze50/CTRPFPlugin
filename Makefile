@@ -14,7 +14,9 @@ PLGINFO 	:= 	CTRPluginFramework.plgInfo
 
 BUILD		:= 	Build
 INCLUDES	:= 	Includes
-SOURCES 	:= 	Sources
+SOURCES 	:= 	Sources \
+				Sources/Helpers \
+				Sources/ScriptEngine
 
 #---------------------------------------------------------------------------------
 # options for code generation
