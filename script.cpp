@@ -42,6 +42,35 @@ enum KeywordKind {
   KW_FUNC,
 };
 
+//
+// TypeKind: kinds of type-info of object.
+//
+enum TypeKind : uint8_t {
+  TYPE_None,
+  TYPE_Int,
+  TYPE_Float,
+  TYPE_Bool,
+  TYPE_Char,
+  TYPE_Pointer,
+  TYPE_String,
+  TYPE_List,
+};
+
+enum NodeKind {
+  ND_VALUE,
+  ND_VARIABLE,
+
+  ND_ADD,
+  ND_SUB,
+  ND_MUL,
+  ND_DIV,
+
+  ND_IF,
+  ND_FOR,
+
+  ND_FUNC,
+};
+
 
 static const std::pair<KeywordKind, char const*> d_kwd_kind_table[] {
   { KW_NONE,      ""        },
@@ -56,38 +85,6 @@ static const std::pair<KeywordKind, char const*> d_kwd_kind_table[] {
   { KW_FUNC,      "func"    },
 };
 
-
-struct Object;
-struct Token {
-  TokenKind kind;
-  KeywordKind kwd;
-  size_t position;
-  std::string_view str;
-  Object* object;     // when TOK_VALUE
-
-  Token(TokenKind kind, size_t pos, std::string_view s = "", Object* object = nullptr)
-    : kind(kind),
-      position(pos),
-      str(s),
-      object(object)
-  {
-  }
-};
-
-
-//
-// TypeKind: kinds of type-info of object.
-//
-enum TypeKind : uint8_t {
-  TYPE_None,
-  TYPE_Int,
-  TYPE_Float,
-  TYPE_Bool,
-  TYPE_Char,
-  TYPE_Pointer,
-  TYPE_String,
-  TYPE_List,
-};
 
 //
 // オブジェクト
@@ -146,7 +143,7 @@ public:
   }
 
   #define  _obj_creator(Name, T, K, V)  \
-    static Object new_ ## Name (T val) { \
+    static Object from_ ## Name (T val) { \
       Object obj{ K }; obj.V = val; return obj; \
     }
 
@@ -155,13 +152,13 @@ public:
   _obj_creator(bool, bool, TYPE_Bool, v_bool);
   _obj_creator(char, char, TYPE_Char, v_char);
 
-  static Object new_string(std::u16string str) {
+  static Object from_string(std::u16string str) {
     Object obj { TYPE_String };
     *obj.v_str_p = std::move(str);
     return obj;
   }
 
-  static Object new_list(std::vector<Object> list) {
+  static Object from_list(std::vector<Object> list) {
     Object obj { TYPE_List };
     *obj.v_list_p = std::move(list);
     return obj;
@@ -169,7 +166,7 @@ public:
 
   //
   // コンストラクタ
-  Object(TypeKind kind)
+  Object(TypeKind kind = TYPE_None)
     : kind(TYPE_None),
       v_int(0)
   {
@@ -196,20 +193,37 @@ public:
 };
 
 
-enum NodeKind {
-  ND_VALUE,
-  ND_VARIABLE,
+struct Token {
+  TokenKind         kind;
+  KeywordKind       kwd;
+  size_t            position;
+  std::string_view  str;
+  Object            object;     // when TOK_VALUE
 
-  ND_ADD,
-  ND_SUB,
-  ND_MUL,
-  ND_DIV,
+  Token(TokenKind kind, size_t pos, std::string_view s = "", Object object = { }, KeywordKind kwd = KW_NONE)
+    : kind(kind),
+      kwd(kwd),
+      position(pos),
+      str(s),
+      object(std::move(object))
+  {
+  }
 
-  ND_IF,
-  ND_FOR,
 
-  ND_FUNC,
+  //
+  // デバッグ用関数 ( ソースコード上で作成できるようにするため )
+  //
+  static Token from_value(Object&& obj) {
+    return Token(TOK_VALUE, 0, "", obj);
+  }
+
+  static Token from_str(std::string_view s, TokenKind kind = TOK_IDENT, KeywordKind kwd = KW_NONE) {
+    return Token(kind, 0, s, { }, kwd);
+  }
+
+
 };
+
 
 
 #define  _NC      child
@@ -217,16 +231,16 @@ enum NodeKind {
 #define  nd_rhs   _NC[1]
 
 struct Node {
-  NodeKind  kind;
-  Token*    token;
-  Object*   value;
+  NodeKind        kind;
+  Token const*    token;
+  Object const*   value; // ONLY SET POINTER TO OBJECT CONTAINED BY TOKEN!!!!
   std::vector<Node>  child;
 
 
-  Node(NodeKind kind, std::vector<Node> child)
+  Node(NodeKind kind, Token const* token, Object const* value, std::vector<Node> child = { })
     : kind(kind),
-      token(nullptr),
-      value(nullptr),
+      token(token),
+      value(value),
       child(std::move(child))
   {
   }
@@ -273,28 +287,58 @@ public:
     return false;
   }
 
-  template <class T, class... Args>
-  bool eat(T&& t, Args&&... args) {
+  template <class T, class U, class... Args>
+  bool eat(T&& t, U&& u, Args&&... args) {
     if( this->eat(t) ) {
-      return this->eat(args...);
+      return this->eat(u, args...);
     }
 
     return false;
   }
 
 
-
-
   Node prs_factor() {
+    this->save();
 
+    if( this->eat(TOK_VALUE) )
+      return Node(ND_VALUE, this->temp, &this->temp->object);
+
+    printf("syntax err\n");
+    exit(1);
+  }
+
+  Node prs_term() {
+    auto x = this->prs_factor();
+
+    while( this->check() ) {
+      this->save();
+
+      if( this->eat("*") )
+        x = Node{ ND_MUL, this->temp, nullptr, { x, this->prs_factor() } };
+      else if( this->eat("/") )
+        x = Node{ ND_DIV, this->temp, nullptr, { x, this->prs_factor() } };
+      else
+        break;
+    }
+
+    return x;
+  }
+
+  Node parse() {
+    return this->prs_term();
   }
 
 
 private:
 
+  void save() {
+    this->temp = this->current;
+  }
+
   std::vector<Token> const& tokenlist;
   Token const*  current;
   Token const*  end;
+  Token const*  temp; // save current pointer temporary
 
 };
 
@@ -308,16 +352,24 @@ R"(
 )";
 
 
-  Object obj{ TYPE_List };
-
-  for(int i=0;i<10;i++){
-    obj.v_list_p->emplace_back(Object::new_int(i));
-  }
+  std::cout<<"Hello!\n";
 
 
+  std::vector<Token> tokenlist {
+    Token::from_value(Object::from_int(1)),
+    Token::from_str("*", TOK_PUNCT),
+    Token::from_value(Object::from_int(2)),
+    Token::from_str("*", TOK_PUNCT),
+    Token::from_value(Object::from_int(3)),
+  };
 
 
-  std::cout << "Hello!\n";
+  Parser parser{ tokenlist };
+
+  auto node = parser.parse();
+
+
+
 
 
 }
