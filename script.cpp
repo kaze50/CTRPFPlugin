@@ -3,7 +3,7 @@
 #include <vector>
 #include <utility>
 #include <algorithm>
-
+#include <cassert>
 
 //
 // TokenKind: kinds of token.
@@ -54,6 +54,8 @@ enum TypeKind : uint8_t {
   TYPE_Pointer,
   TYPE_String,
   TYPE_List,
+
+  // 16 個まで！！
 };
 
 enum NodeKind {
@@ -91,7 +93,8 @@ static const std::pair<KeywordKind, char const*> d_kwd_kind_table[] {
 //
 struct __attribute__((__packed__)) Object {
 private:
-  TypeKind  kind;
+  TypeKind  kind : 8;
+
 
 public:
   
@@ -226,7 +229,11 @@ struct Token {
 
 
 
+//
+// preprocessers to access to childlen node of node
+
 #define  _NC      child
+
 #define  nd_lhs   _NC[0]
 #define  nd_rhs   _NC[1]
 
@@ -342,6 +349,36 @@ private:
 
 };
 
+class Evaluator {
+
+public:
+
+  static Object obj_mul(Object a, Object const& b) {
+    a.v_int *= b.v_int;
+
+    return a;
+  }
+
+  Object eval(Node const& node) {
+
+    switch( node.kind ) {
+      case ND_MUL:
+        return obj_mul(this->eval(node.nd_lhs), this->eval(node.nd_rhs));
+
+      default:
+        break;
+    }
+
+    assert(node.kind == ND_VALUE);
+    return node.token->object;
+  }
+
+
+private:
+
+
+
+};
 
 
 int main() {
@@ -368,9 +405,13 @@ R"(
 
   auto node = parser.parse();
 
+  Evaluator evaluator;
+
+  auto obj = evaluator.eval(node);
 
 
-
+  std::cout<<obj.v_int<<std::endl;
+  
 
 }
 
